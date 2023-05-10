@@ -2,11 +2,36 @@
 const flightScanner = require('../');
 
 const flightOptions = {
-  from: 'my-departure-city',
-  to: 'my-destination-city',
-  departureDate: 'YYYY-MM-DD',
-  resultsCount: 'Number of desired results', // 0 -> Infinity
-  partialTrips: 'Exit flight early' //true or false
+   from: [
+    'AMS',
+    'ATH',
+    'BCN',
+    'BER',
+    'BRU',
+    'BUD',
+    'CDG',
+    'CPH',
+    'DUB',
+    'FCO',
+    'FRA',
+    'GVA',
+    'IST',
+    'LHR',
+    'LIS',
+    'MAD',
+    'MUC',
+    'OSL',
+    'PRG',
+    'TXL',
+    'VIE',
+    'WAW',
+    'ZRH'
+  ],
+  to: 'ORD',
+  departureDate: '2023-06-28',
+  sort: 'duration',
+  resultsCount: 99
 };
 
-flightScanner(flightOptions).then(console.log).catch(console.error);
+flightScanner(flightOptions).catch(console.error).then(res=>console.log(res));
+
