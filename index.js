@@ -1,17 +1,12 @@
 const airports = require("airport-codes");
-const moment = require("moment-timezone");
 
-const get = require("./asyncGet");
+module.exports = async function (flightOptions = {}) {
+  flightOptions.resultsCount =
+    flightOptions.resultsCount > -1 ? flightOptions.resultsCount || Infinity : 1; //Number of results to display, Skiplagged has their own limit
+  flightOptions.partialTrips = flightOptions.partialTrips || false; //Example: Orlando -> San Fran -> Tokyo (Actual Stop) -> Hong Kong
 
-const host = "https://skiplagged.com";
-
-module.exports = async function (flightInfo = {}) {
-  flightInfo.resultsCount =
-    flightInfo.resultsCount > -1 ? flightInfo.resultsCount || Infinity : 1; //Number of results to display, Skiplagged has their own limit
-  flightInfo.partialTrips = flightInfo.partialTrips || false; //Example: Orlando -> San Fran -> Tokyo (Actual Stop) -> Hong Kong
-
-  flightInfo.sort = flightInfo.sort || "cost"; //cost || duration || path
-  const { from, to, departureDate, returnDate, sort = "cost" } = flightInfo;
+  flightOptions.sort = flightOptions.sort || "cost"; //cost || duration || path
+  const { from, to, departureDate, returnDate, sort = "cost" } = flightOptions;
   if (!from) {
     throw '"from" is a required field!';
   }
@@ -23,9 +18,10 @@ module.exports = async function (flightInfo = {}) {
   }
 
   const webCall = [];
+  const urls = [];
   const data = [];
   const jsonData = [];
-  flightInfo.from.forEach((code) => {
+  flightOptions.from.forEach((code) => {
     const url = `https://skiplagged.com/api/search.php?from=${code}&to=${to}&depart=${departureDate}&sort=${sort}${
       returnDate ? `&return=${returnDate}` : ""
     }`;
@@ -33,7 +29,10 @@ module.exports = async function (flightInfo = {}) {
       fetch(url, { method: "GET" }).then((response) => {
         if (response.ok)
         // add URL to this array 
-        data.push(response.json());
+        {
+          data.push(response.json());
+          urls.push({code, to});
+        }
         else console.log(response);
       })
     );
@@ -45,6 +44,7 @@ module.exports = async function (flightInfo = {}) {
   );
   await Promise.allSettled(data).then((results) =>
     results.forEach((result) => {
+      let x = results;
       if (result.status != "rejected" && (result.value.success != false)) jsonData.push(result.value);
       else console.error(result);
     })
@@ -53,7 +53,7 @@ module.exports = async function (flightInfo = {}) {
   const {
     attributes: { city: toCityName },
   } = airports.findWhere({ iata: to });
-  const { resultsCount, partialTrips } = flightInfo;
+  const { resultsCount, partialTrips, maxDurationSeconds } = flightOptions;
   const flights = [];
   jsonData.forEach((flightData) =>
     flightData.depart.forEach((flight, count) => {
@@ -124,12 +124,9 @@ module.exports = async function (flightInfo = {}) {
           airports.findWhere({ iata: arriveAirport }).get("city") +
           ", " +
           airports.findWhere({ iata: arriveAirport }).get("country");
-        const departureTime = moment
-          .tz(legs[i][2], departureZone)
-          .format("dddd, MMMM Do YYYY, hh:mma");
-        const arrivalTime = moment
-          .tz(arriveDatetime, arrivalZone)
-          .format("dddd, MMMM Do YYYY, hh:mma");
+        const departureTime = Date.parse(legs[i][2], "dddd, MMMM Do YYYY, hh:mma");
+        const arrivalTime = Date.parse(arriveDatetime, "dddd, MMMM Do YYYY, hh:mma");
+          
         const current_leg = {
           airline,
           flightCode,
@@ -137,18 +134,31 @@ module.exports = async function (flightInfo = {}) {
           durationSeconds,
           departingFrom,
           departureTime,
+          departeDatetime,
           arrivingAt,
           arrivalTime,
+          arriveDatetime,
         };
-
+        if (i > 0) {
+          current_leg.layoverSeconds = findTimestampDifference(currentFlight.legs[i-1].arriveDatetime, departeDatetime);
+          current_leg.layover = parseDurationInt(current_leg.layoverSeconds);
+        }
         if (i === 0) {
           currentFlight.departureTime = departureTime;
         } else if (i === legs.length - 1) {
           currentFlight.arrivalTime = arrivalTime;
         }
 
+
         currentFlight.legs.push(current_leg);
       }
+
+      let firstLeg = currentFlight.legs[0];
+      let lastLeg = currentFlight.legs.slice(-1)[0];
+      currentFlight.departureTime = firstLeg.departureTime;
+      currentFlight.arrivalTime = lastLeg.departureTime;
+      if(findTimestampDifference(firstLeg.departeDatetime, lastLeg.arriveDatetime) > maxDurationSeconds)
+        return; 
 
       flights.push(currentFlight);
     })
@@ -201,13 +211,5 @@ function parseDurationInt(duration) {
 }
 
 function findTimestampDifference(startTimestamp, endTimestamp) {
-  const moment = require("moment-timezone");
-  const zone = `America/New_York`;
-
-  const startTimestampZoned = moment(moment.tz(startTimestamp, zone).format());
-  const endTimestampZoned = moment(moment.tz(endTimestamp, zone).format());
-
-  const difference = endTimestampZoned.diff(startTimestampZoned, "seconds");
-
-  return difference;
+  return (Date.parse(endTimestamp)-Date.parse(startTimestamp))/1000;
 }
