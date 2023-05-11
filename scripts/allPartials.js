@@ -1,15 +1,42 @@
 const codes = require('../codes.js');
-
-const flightScanner = require("../");
+const flightScanner = require("..");
 const fs = require('fs');
+const airports = require("airport-codes");
+const USA = airports.where ({country: "United States"}).filter(a=>(a.get('iata')!='\\N')).map(a=>a.get('iata'));
+const EU = [
+  "AMS",
+  "ATH",
+  "BCN",
+  "BER",
+  "BRU",
+  "BUD",
+  "CDG",
+  "CPH",
+  "DUB",
+  "FCO",
+  "FRA",
+  "GVA",
+  "IST",
+  "LHR",
+  "LIS",
+  "MAD",
+  "MUC",
+  "OSL",
+  "PRG",
+  // "TXL", Old
+  "VIE",
+  "WAW",
+  "ZRH",
+];
 
 const flightOptions = {
-  from: codes.EUMajor,
-  to: ["ORD"],
+  from: "DFW",
+  to: USA,
   departureDate: "2023-06-28",
   sort: "cost",
   resultsCount: 0,
   partialTrips: true,
+
   maxDurationSeconds: 64800 // max length of flight in seconds (including layover)
 };
 
